@@ -1,0 +1,21 @@
+{
+  "name": "satispay-firebase",
+  "version": "1.0.0",
+  "description": "A gateway to handle satispay payments and use firestore as storage",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/websocket": "^9.0.0",
+    "axios": "^1.6.7",
+    "crypto": "^1.0.1",
+    "fastify": "^4.26.2",
+    "firebase": "^10.8.1",
+    "firebase-admin": "^12.0.0",
+    "fs": "^0.0.1-security",
+    "nodemon": "^3.1.0"
+  }
+}
