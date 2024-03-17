@@ -53,7 +53,15 @@ FIREBASE_MESSAGING_SENDER_ID={{FIREBASE_MESSAGING_SENDER_ID}}
 FIREBASE_APP_ID={{FIREBASE_APP_ID}}
 FIREBASE_MEASUREMENT_ID={{FIREBASE_MEASUREMENT_ID}}
 ```
-Run this command
+Generate KEY pairs
+```
+./step-1-generate-rsa-key-pair.sh
+```
+Obtain key-id.json
+```
+./step-2-obtain-key-id.sh
+```
+Run service
 ```
 node index.js
 ```
