@@ -57,9 +57,13 @@ Generate KEY pairs
 ```
 ./step-1-generate-rsa-key-pair.sh
 ```
-Obtain key-id.json
+Obtain `key-id.json`
 ```
 ./step-2-obtain-key-id.sh
+```
+Install dependencies
+```
+npm install
 ```
 Run service
 ```
