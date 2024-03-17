@@ -1,5 +1,5 @@
-Satispay firebase
-=================
+Satispay firestore
+==================
 
 API
 ---
