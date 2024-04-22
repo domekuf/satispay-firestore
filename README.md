@@ -7,7 +7,8 @@ API
 POST /payment
 {
   "orderId": "any-string",
-  "phoneNumber": "+393214567890"
+  "phoneNumber": "+393214567890",
+  "price": 500
 }
 Response
 {
@@ -41,7 +42,6 @@ API_ENDPOINT=payment # API
 HOST=0.0.0.0
 PORT=3000 
 PAYMENTS_COLLECTION=payments # Firebase collection name
-PRICE=500 # EUR cents
 SECRET=XYZ # used to construct Satispay's callback url
 LOCATION=https://pay.ginepro.cc
 

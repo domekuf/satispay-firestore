@@ -1,5 +1,6 @@
 const fastify = require('fastify')({logger: true})
 fastify.register(require('@fastify/websocket'))
+fastify.register(require('@fastify/cors'));
 const fb = require('firebase/app');
 const fs = require('firebase/firestore');
 const { createPayment, getPayment} = require('./satispay');
@@ -8,7 +9,6 @@ const apiEndpoint = process.env.API_ENDPOINT || 'payment';
 const host = process.env.HOST || '0.0.0.0';
 const port = process.env.PORT || '3000';
 const paymentsCollection = process.env.PAYMENTS_COLLECTION || 'payments';
-const price = parseInt(process.env.PRICE) || 500;
 const secret = process.env.SECRET || 'XYZ';
 const location = process.env.LOCATION;
 
@@ -49,6 +49,7 @@ fastify.post(`/${apiEndpoint}`, async (request, reply) => {
   }
   const orderId = request.body.orderId;
   const phoneNumber = request.body.phoneNumber;
+  const price = request.body.price;
   return createPayment(orderId, price, phoneNumber, `${location}/${secret}/{uuid}`)
     .then(async (payment) => {
       const paymentId = payment.paymentId;
