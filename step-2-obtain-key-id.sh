@@ -1,14 +1,14 @@
 #!/bin/bash
 # https://developers.satispay.com/reference/keyid
 
-source env.sh
+source .env
 if [ -z "$SATISPAY_ACTIVATION_CODE" ]; then
     echo "Satispay activation code is not set."
     read -p "Please enter Satispay activation code, you can retrieve it from Satispay business dashboard: " SATISPAY_ACTIVATION_CODE
 fi
 
 # Replace newline with '\n' control character as stated in documentation
-PUBKEY=$(sed ':a;N;$!ba;s/\n/\\n/g' public.pem)
+PUBKEY=$(awk '{printf "%s\\n", $0}' public.pem | sed 's/\\n$//')
 echo -n $PUBKEY > public.txt
 
 curl --request POST \
