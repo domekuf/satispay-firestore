@@ -27,12 +27,16 @@ export interface Tenant {
 
 // ─── Satispay Instance ────────────────────────────────────────────────────────
 
+export type InstanceCredentialsStatus = 'ok' | 'key_mismatch' | 'unavailable';
+
 export interface SatispayInstance {
   id: string;
   tenantId: string;
   label: string;
   keyId: string;
   createdAt: string;
+  credentialsStatus?: InstanceCredentialsStatus;
+  credentialsError?: string;
 }
 
 export interface CreateInstanceRequest {
@@ -69,6 +73,7 @@ export interface Payment {
   tenantId: string;
   instanceId: string;
   orderId: string;
+  phoneNumber?: string;
   amountUnit: number;
   currency: 'EUR';
   status: PaymentStatus;

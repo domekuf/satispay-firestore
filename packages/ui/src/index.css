@@ -1,0 +1,11 @@
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+
+.nav-link {
+  color: var(--gray-11);
+  text-decoration: none;
+  font-size: var(--font-size-2);
+  transition: color 120ms;
+}
+.nav-link:hover { color: var(--gray-12); }
+.nav-link.active { color: var(--gray-12); font-weight: 500; }

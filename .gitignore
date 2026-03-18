@@ -1,6 +1,8 @@
 .env
 key-id.json
 node_modules/
+packages/**/dist/
 private.pem
 public.pem
 public.txt
+**/firebase-credentials.json

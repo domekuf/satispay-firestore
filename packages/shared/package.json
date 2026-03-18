@@ -1,11 +1,14 @@
 {
-  "name": "@satispay-firestore/shared",
+  "name": "@muvat/shared",
   "version": "1.0.0",
-  "description": "Shared TypeScript types for satispay-firestore",
+  "description": "Shared TypeScript types for Muvat",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
   },
   "license": "ISC"
 }

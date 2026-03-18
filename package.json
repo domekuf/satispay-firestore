@@ -1,22 +1,13 @@
 {
-  "name": "satispay-firebase",
+  "name": "muvat",
+  "private": true,
   "version": "1.0.0",
-  "description": "A gateway to handle satispay payments and use firestore as storage",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @muvat/server --filter @muvat/ui run dev",
+    "dev:server": "pnpm --filter @muvat/server run dev",
+    "dev:ui": "pnpm --filter @muvat/ui run dev",
+    "lint": "pnpm -r lint"
   },
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@fastify/cors": "^9.0.1",
-    "@fastify/websocket": "^9.0.0",
-    "axios": "^1.6.7",
-    "crypto": "^1.0.1",
-    "fastify": "^4.26.2",
-    "firebase": "^10.8.1",
-    "firebase-admin": "^12.0.0",
-    "fs": "^0.0.1-security",
-    "nodemon": "^3.1.0"
-  }
+  "packageManager": "pnpm@9.15.2+sha512.93e57b0126f0df74ce6bff29680394c0ba54ec47246b9cf321f0121d8d9bb03f750a705f24edc3c1180853afd7c2c3b94196d0a3d53d3e069d9e2793ef11f321"
 }
