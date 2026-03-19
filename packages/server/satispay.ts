@@ -51,16 +51,17 @@ function sign(signingString: string, privateKey: string): string {
   return crypto.createSign('RSA-SHA256').update(signingString).sign(privateKey, 'base64');
 }
 
-function authHeader(keyId: string, signature: string): string {
-  return `Signature keyId="${keyId}", algorithm="rsa-sha256", headers="(request-target) host date digest", signature="${signature}"`;
+function authHeader(keyId: string, signedHeaders: string, signature: string): string {
+  return `Signature keyId="${keyId}", algorithm="rsa-sha256", headers="${signedHeaders}", signature="${signature}"`;
 }
 
 function buildGetHeaders(path: string, digest: string, date: string, keys: SatispayKeys): Record<string, string> {
+  const signedHeaders = '(request-target) host digest date';
   const signingString = [
     `(request-target): get ${path}`,
     `host: ${SATISPAY_HOST}`,
-    `date: ${date}`,
     `digest: ${digest}`,
+    `date: ${date}`,
   ].join('\n');
 
   return {
@@ -68,26 +69,32 @@ function buildGetHeaders(path: string, digest: string, date: string, keys: Satis
     host: SATISPAY_HOST,
     date,
     digest,
-    authorization: authHeader(keys.keyId, sign(signingString, keys.privateKey)),
+    authorization: authHeader(keys.keyId, signedHeaders, sign(signingString, keys.privateKey)),
   };
 }
 
 function buildPostHeaders(path: string, bodyStr: string, date: string, keys: SatispayKeys): Record<string, string> {
+  const contentType = 'application/json';
+  const contentLength = Buffer.byteLength(bodyStr, 'utf8').toString();
   const digest = `SHA-256=${crypto.createHash('sha256').update(bodyStr).digest('base64')}`;
+  const signedHeaders = '(request-target) host content-type content-length digest date';
   const signingString = [
     `(request-target): post ${path}`,
     `host: ${SATISPAY_HOST}`,
-    `date: ${date}`,
+    `content-type: ${contentType}`,
+    `content-length: ${contentLength}`,
     `digest: ${digest}`,
+    `date: ${date}`,
   ].join('\n');
 
   return {
     accept: 'application/json',
     host: SATISPAY_HOST,
-    'Content-Type': 'application/json',
-    Date: date,
-    Digest: digest,
-    authorization: authHeader(keys.keyId, sign(signingString, keys.privateKey)),
+    'content-type': contentType,
+    'content-length': contentLength,
+    date,
+    digest,
+    authorization: authHeader(keys.keyId, signedHeaders, sign(signingString, keys.privateKey)),
   };
 }
 
@@ -142,8 +149,8 @@ async function retrieveConsumer(
   phoneNumber: string,
   keys: SatispayKeys,
 ): Promise<SatispayConsumer> {
-  const normalizedPhoneNumber = phoneNumber.trim();
-  const path = `${SATISPAY_API}/consumers/${encodeURIComponent(normalizedPhoneNumber)}`;
+  const normalizedPhoneNumber = phoneNumber.trim().replace(/[\s()-]/g, '');
+  const path = `${SATISPAY_API}/consumers/${normalizedPhoneNumber}`;
   const date = new Date().toUTCString();
   const headers = buildGetHeaders(path, EMPTY_DIGEST, date, keys);
   return satispayFetch<SatispayConsumer>(

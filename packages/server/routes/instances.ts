@@ -1,8 +1,15 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { SatispayApiError, getSatispayHost, registerInstance, type SatispayKeys } from '../satispay';
+import { SatispayApiError, getPayment, getSatispayHost, registerInstance, type SatispayKeys } from '../satispay';
 import { EncryptionKeyMismatchError, encrypt, decrypt } from '../crypto';
 import { getAdminDb } from '../firebase-admin';
-import type { CreateInstanceRequest, CreateInstanceResponse, Payment, SatispayInstance } from '@muvat/shared';
+import type {
+  CreateInstanceRequest,
+  CreateInstanceResponse,
+  Payment,
+  ReconcilePaymentsRequest,
+  ReconcilePaymentsResponse,
+  SatispayInstance,
+} from '@muvat/shared';
 
 function mapInstanceRegistrationError(error: unknown): { statusCode: number; message: string } | null {
   if (!(error instanceof SatispayApiError)) return null;
@@ -94,6 +101,11 @@ function mapPayment(id: string, data: Record<string, unknown>): Payment {
   };
 }
 
+function normalizeLimit(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 50;
+  return Math.max(1, Math.min(200, Math.trunc(value)));
+}
+
 const instancesPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.get('/instances', async (request, reply) => {
     const { tenantId } = request.user;
@@ -121,6 +133,79 @@ const instancesPlugin: FastifyPluginAsync = async (fastify) => {
       .map((d) => mapPayment(d.id, d.data() as Record<string, unknown>))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return reply.send(payments);
+  });
+
+  fastify.post('/instances/:instanceId/reconcile', async (request, reply) => {
+    const { tenantId } = request.user;
+    const { instanceId } = request.params as { instanceId: string };
+    const body = request.body as ReconcilePaymentsRequest | undefined;
+    const limit = normalizeLimit(body?.limit);
+    const db = getAdminDb();
+
+    let keys: SatispayKeys;
+    try {
+      keys = await loadInstanceKeys(tenantId, instanceId);
+    } catch (error) {
+      if (error instanceof InstanceKeyDecryptError) {
+        return reply.status(409).send({
+          error: `Le credenziali dell'istanza non sono decifrabili con la ENCRYPTION_KEY corrente. Ricrea l'istanza ${error.instanceId} oppure ripristina la chiave precedente.`,
+        });
+      }
+      if (error instanceof Error && error.message.includes('not found')) {
+        return reply.status(404).send({ error: 'Instance not found' });
+      }
+      throw error;
+    }
+
+    const snap = await db.collection('tenants').doc(tenantId).collection('payments').where('instanceId', '==', instanceId).get();
+    const pendingPayments = snap.docs
+      .map((doc) => ({ id: doc.id, data: mapPayment(doc.id, doc.data() as Record<string, unknown>) }))
+      .filter((payment) => payment.data.status === 'PENDING')
+      .sort((a, b) => a.data.createdAt.localeCompare(b.data.createdAt))
+      .slice(0, limit);
+
+    const response: ReconcilePaymentsResponse = {
+      instanceId,
+      checked: 0,
+      updated: 0,
+      unchanged: 0,
+      errors: [],
+      payments: [],
+    };
+
+    for (const payment of pendingPayments) {
+      response.checked += 1;
+      try {
+        const remote = await getPayment(payment.id, keys);
+        if (remote.status === payment.data.status) {
+          response.unchanged += 1;
+          continue;
+        }
+
+        const updatedAt = new Date().toISOString();
+        await db.collection('tenants').doc(tenantId).collection('payments').doc(payment.id).update({
+          status: remote.status,
+          updatedAt,
+        });
+
+        response.updated += 1;
+        response.payments.push({
+          paymentId: payment.id,
+          fromStatus: payment.data.status,
+          toStatus: remote.status as Payment['status'],
+          updatedAt,
+        });
+      } catch (error) {
+        const message = error instanceof SatispayApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : String(error);
+        response.errors.push({ paymentId: payment.id, message });
+      }
+    }
+
+    return reply.send(response);
   });
 
   fastify.post('/instances', async (request, reply) => {

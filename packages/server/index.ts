@@ -41,8 +41,47 @@ const db = getAdminDb();
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+class InvalidLocationConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidLocationConfigError';
+  }
+}
+
 function paymentDoc(tenantId: string, paymentId: string) {
   return db.collection('tenants').doc(tenantId).collection('payments').doc(paymentId);
+}
+
+function buildCallbackUrl(tenantId: string, instanceId: string): string {
+  const raw = location?.trim();
+  if (!raw) {
+    throw new InvalidLocationConfigError(
+      'LOCATION non configurata. Imposta la base URL pubblica del server, ad esempio https://api.example.com, cosi Satispay puo richiamare il callback.',
+    );
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new InvalidLocationConfigError(
+      'LOCATION deve essere una URL assoluta valida, ad esempio https://api.example.com.',
+    );
+  }
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new InvalidLocationConfigError(
+      'LOCATION deve usare protocollo http o https.',
+    );
+  }
+
+  if (['localhost', '127.0.0.1', '0.0.0.0'].includes(parsed.hostname)) {
+    throw new InvalidLocationConfigError(
+      'LOCATION punta a localhost e non e raggiungibile da Satispay. Usa una URL pubblica del backend.',
+    );
+  }
+
+  return `${raw.replace(/\/+$/, '')}/${secret}/${tenantId}/${instanceId}/{uuid}`;
 }
 
 function mapInstanceKeyError(reply: import('fastify').FastifyReply, error: unknown): boolean {
@@ -64,7 +103,7 @@ function mapSatispayRequestError(reply: import('fastify').FastifyReply, error: u
   }
   if (error.status === 401 && error.code === 34) {
     reply.status(400).send({
-      error: `Satispay ha rifiutato l'autenticazione della richiesta. Molto spesso significa che stai usando credenziali ${currentEnv} contro l'host sbagliato, oppure viceversa. Verifica SATISPAY_ENV e riavvia il server. Riferimento Satispay: ${error.wlt ?? 'n/d'}.`,
+      error: `Satispay ha rifiutato l'autenticazione della richiesta. Le cause piu comuni sono: host/ambiente errato per credenziali ${currentEnv}, firma HTTP non valida, oppure keyId e chiave privata che non corrispondono. Riferimento Satispay: ${error.wlt ?? 'n/d'}.`,
     });
     return true;
   }
@@ -145,6 +184,15 @@ fastify.post(`/${apiEndpoint}/:instanceId`, { preHandler: authenticate }, async 
 
   const { orderId, phoneNumber, price } = body;
   const { tenantId } = request.user;
+  let callbackUrl: string;
+  try {
+    callbackUrl = buildCallbackUrl(tenantId, instanceId);
+  } catch (error) {
+    if (error instanceof InvalidLocationConfigError) {
+      return reply.status(500).send({ error: error.message });
+    }
+    throw error;
+  }
 
   let keys;
   try {
@@ -155,7 +203,7 @@ fastify.post(`/${apiEndpoint}/:instanceId`, { preHandler: authenticate }, async 
   }
   const payment = await createPayment(
     orderId, price, phoneNumber,
-    `${location}/${secret}/${tenantId}/${instanceId}/{uuid}`,
+    callbackUrl,
     keys,
   ).catch((error) => {
     if (mapSatispayRequestError(reply, error)) return null;
@@ -172,6 +220,7 @@ fastify.post(`/${apiEndpoint}/:instanceId`, { preHandler: authenticate }, async 
     status: 'PENDING',
     amountUnit: price,
     currency: 'EUR',
+    callbackUrl,
     createdAt: new Date().toISOString(),
   });
 

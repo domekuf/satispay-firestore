@@ -35,6 +35,7 @@ import type {
   CreatePaymentResponse,
   InstanceCredentialsStatus,
   Payment,
+  ReconcilePaymentsResponse,
   SatispayInstance,
 } from '@muvat/shared';
 
@@ -59,6 +60,18 @@ function formatAmount(amountUnit: number): string {
     style: 'currency',
     currency: 'EUR',
   }).format(amountUnit / 100);
+}
+
+function formatReconcileSummary(result: ReconcilePaymentsResponse): string {
+  const parts = [
+    `${result.checked} controllati`,
+    `${result.updated} aggiornati`,
+    `${result.unchanged} invariati`,
+  ];
+  if (result.errors.length > 0) {
+    parts.push(`${result.errors.length} errori`);
+  }
+  return `Riconciliazione completata: ${parts.join(', ')}.`;
 }
 
 function statusColor(status: Payment['status']): 'gray' | 'green' | 'red' | 'amber' {
@@ -108,6 +121,7 @@ export function InstanceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshSummary, setRefreshSummary] = useState<string | null>(null);
   const [showCreatePayment, setShowCreatePayment] = useState(false);
 
   const canCreatePayments = instance?.credentialsStatus === 'ok';
@@ -150,6 +164,39 @@ export function InstanceDetailPage() {
       setError(err instanceof Error ? err.message : 'Impossibile caricare il dettaglio istanza.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (!token || !instanceId) return;
+    setRefreshing(true);
+    setError(null);
+    setRefreshSummary(null);
+
+    try {
+      if (instance?.credentialsStatus === 'ok') {
+        const res = await fetch(`${API_BASE}/instances/${instanceId}/reconcile`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ limit: 50 }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json() as { error?: string };
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+
+        const result = await res.json() as ReconcilePaymentsResponse;
+        setRefreshSummary(formatReconcileSummary(result));
+      }
+
+      await fetchData('refresh');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Impossibile aggiornare i pagamenti.');
       setRefreshing(false);
     }
   };
@@ -197,9 +244,9 @@ export function InstanceDetailPage() {
             </Box>
 
             <Flex gap="2" wrap="wrap">
-              <Button variant="soft" color="gray" onClick={() => void fetchData('refresh')} disabled={refreshing || loading}>
+              <Button variant="soft" color="gray" onClick={() => void handleRefresh()} disabled={refreshing || loading}>
                 <ReloadIcon />
-                {refreshing ? 'Aggiornamento…' : 'Aggiorna'}
+                {refreshing ? 'Sincronizzazione…' : 'Aggiorna'}
               </Button>
               <Button onClick={() => setShowCreatePayment(true)} disabled={Boolean(instance && !canCreatePayments)}>
                 <PlusIcon /> Nuovo pagamento manuale
@@ -222,6 +269,13 @@ export function InstanceDetailPage() {
             <Callout.Root color="red">
               <Callout.Icon><ExclamationTriangleIcon /></Callout.Icon>
               <Callout.Text>{error}</Callout.Text>
+            </Callout.Root>
+          )}
+
+          {refreshSummary && !error && (
+            <Callout.Root color="green">
+              <Callout.Icon><CheckIcon /></Callout.Icon>
+              <Callout.Text>{refreshSummary}</Callout.Text>
             </Callout.Root>
           )}
 

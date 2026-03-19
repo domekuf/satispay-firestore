@@ -90,3 +90,28 @@ export interface CreatePaymentRequest {
 export interface CreatePaymentResponse {
   paymentId: string;
 }
+
+export interface ReconcilePaymentsRequest {
+  limit?: number;
+}
+
+export interface ReconciledPayment {
+  paymentId: string;
+  fromStatus: PaymentStatus;
+  toStatus: PaymentStatus;
+  updatedAt: string;
+}
+
+export interface ReconcilePaymentsError {
+  paymentId: string;
+  message: string;
+}
+
+export interface ReconcilePaymentsResponse {
+  instanceId: string;
+  checked: number;
+  updated: number;
+  unchanged: number;
+  errors: ReconcilePaymentsError[];
+  payments: ReconciledPayment[];
+}
