@@ -60,7 +60,7 @@ Configura queste variabili in GitHub Actions:
 
 Per il nuovo progetto Firebase `satispay-gw`:
 
-- `VITE_FIREBASE_API_KEY=AIzaSyDmO4ZGjozgaWDddvj09lTRtEwRIyvLsF8`
+- `VITE_FIREBASE_API_KEY=<rigenera-questa-chiave>`
 - `VITE_FIREBASE_AUTH_DOMAIN=satispay-gw.firebaseapp.com`
 - `VITE_FIREBASE_PROJECT_ID=satispay-gw`
 - `VITE_FIREBASE_STORAGE_BUCKET=satispay-gw.firebasestorage.app`
@@ -223,7 +223,7 @@ Imposta:
 - `GCP_SERVICE_ACCOUNT_EMAIL=$DEPLOYER_SA_EMAIL`
 - `CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT=$RUNTIME_SA_EMAIL`
 - `SATISPAY_ENV=production`
-- `VITE_FIREBASE_API_KEY=AIzaSyDmO4ZGjozgaWDddvj09lTRtEwRIyvLsF8`
+- `VITE_FIREBASE_API_KEY=<rigenera-questa-chiave>`
 - `VITE_FIREBASE_AUTH_DOMAIN=satispay-gw.firebaseapp.com`
 - `VITE_FIREBASE_PROJECT_ID=satispay-gw`
 - `VITE_FIREBASE_STORAGE_BUCKET=satispay-gw.firebasestorage.app`
