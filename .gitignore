@@ -6,3 +6,4 @@ private.pem
 public.pem
 public.txt
 **/firebase-credentials.json
+gha-creds-*.json

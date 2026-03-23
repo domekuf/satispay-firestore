@@ -14,6 +14,8 @@ export interface AuthUser {
   email: string | undefined;
   tenantId: string;
   role: TenantRole;
+  authType?: 'firebase' | 'm2m';
+  clientId?: string;
 }
 
 // ─── Tenant ───────────────────────────────────────────────────────────────────
@@ -62,6 +64,19 @@ export interface RegisterRequest {
 export interface RegisterResponse {
   uid: string;
   tenantId: string;
+}
+
+export interface MachineTokenRequest {
+  clientId?: string;
+  clientSecret?: string;
+  grantType?: 'client_credentials';
+  grant_type?: 'client_credentials';
+}
+
+export interface MachineTokenResponse {
+  access_token: string;
+  token_type: 'Bearer';
+  expires_in?: number;
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import fastifyWebsocket, { WebSocket } from '@fastify/websocket';
 import fastifyCors from '@fastify/cors';
 import { createPayment, getPayment, SatispayApiError } from './satispay';
-import { verifyToken, setUserClaims } from './auth';
+import { verifyToken, validateMachineAuthConfig, setUserClaims } from './auth';
 import { validateEncryptionConfig } from './crypto';
 import instancesPlugin, { InstanceKeyDecryptError, loadInstanceKeys } from './routes/instances';
 import authPlugin from './routes/auth';
@@ -36,6 +36,7 @@ const secret = process.env.SATISPAY_SECRET ?? 'XYZ';
 const location = process.env.LOCATION;
 
 validateEncryptionConfig();
+validateMachineAuthConfig();
 
 const db = getAdminDb();
 

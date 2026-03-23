@@ -1,0 +1,16 @@
+.git
+.github
+node_modules
+packages/**/node_modules
+packages/**/dist
+packages/ui
+.env
+**/.env
+firebase-debug.log
+firebase-debug.*.log
+packages/**/firebase-credentials.json
+key-id.json
+private.pem
+public.pem
+public.txt
+gha-creds-*.json

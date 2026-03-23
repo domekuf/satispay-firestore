@@ -1,0 +1,242 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      GCP_ARTIFACT_REGISTRY_REPOSITORY: ${{ vars.GCP_ARTIFACT_REGISTRY_REPOSITORY }}
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_SERVICE_ACCOUNT_EMAIL: ${{ vars.GCP_SERVICE_ACCOUNT_EMAIL }}
+      CLOUD_RUN_SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+      CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      SATISPAY_ENV: ${{ vars.SATISPAY_ENV }}
+      VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+      VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
+      VITE_FIREBASE_PROJECT_ID: ${{ vars.VITE_FIREBASE_PROJECT_ID }}
+      VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
+      VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+      VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+      VITE_FIREBASE_MEASUREMENT_ID: ${{ vars.VITE_FIREBASE_MEASUREMENT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate GitHub configuration
+        env:
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          M2M_CLIENTS: ${{ secrets.M2M_CLIENTS }}
+          M2M_JWT_SECRET: ${{ secrets.M2M_JWT_SECRET }}
+          SATISPAY_SECRET: ${{ secrets.SATISPAY_SECRET }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          require() {
+            local name="$1"
+            local value="${2:-}"
+            if [ -z "$value" ]; then
+              missing+=("$name")
+            fi
+          }
+
+          require GCP_PROJECT_ID "${GCP_PROJECT_ID:-}"
+          require GCP_REGION "${GCP_REGION:-}"
+          require GCP_ARTIFACT_REGISTRY_REPOSITORY "${GCP_ARTIFACT_REGISTRY_REPOSITORY:-}"
+          require GCP_WORKLOAD_IDENTITY_PROVIDER "${GCP_WORKLOAD_IDENTITY_PROVIDER:-}"
+          require GCP_SERVICE_ACCOUNT_EMAIL "${GCP_SERVICE_ACCOUNT_EMAIL:-}"
+          require CLOUD_RUN_SERVICE "${CLOUD_RUN_SERVICE:-}"
+          require VITE_FIREBASE_API_KEY "${VITE_FIREBASE_API_KEY:-}"
+          require VITE_FIREBASE_AUTH_DOMAIN "${VITE_FIREBASE_AUTH_DOMAIN:-}"
+          require VITE_FIREBASE_PROJECT_ID "${VITE_FIREBASE_PROJECT_ID:-}"
+          require VITE_FIREBASE_STORAGE_BUCKET "${VITE_FIREBASE_STORAGE_BUCKET:-}"
+          require VITE_FIREBASE_MESSAGING_SENDER_ID "${VITE_FIREBASE_MESSAGING_SENDER_ID:-}"
+          require VITE_FIREBASE_APP_ID "${VITE_FIREBASE_APP_ID:-}"
+          require ENCRYPTION_KEY "${ENCRYPTION_KEY:-}"
+          require M2M_JWT_SECRET "${M2M_JWT_SECRET:-}"
+          require M2M_CLIENTS "${M2M_CLIENTS:-}"
+          require SATISPAY_SECRET "${SATISPAY_SECRET:-}"
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf 'Missing GitHub vars/secrets: %s\n' "${missing[*]}" >&2
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ env.GCP_SERVICE_ACCOUNT_EMAIL }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v3
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+          version: ">= 390.0.0"
+
+      - name: Resolve runtime service account
+        id: runtime_sa
+        run: |
+          set -euo pipefail
+
+          runtime_sa="${CLOUD_RUN_RUNTIME_SERVICE_ACCOUNT:-$GCP_SERVICE_ACCOUNT_EMAIL}"
+          echo "email=$runtime_sa" >> "$GITHUB_OUTPUT"
+
+      - name: Sync runtime secrets to Secret Manager
+        env:
+          ENCRYPTION_KEY_VALUE: ${{ secrets.ENCRYPTION_KEY }}
+          ENCRYPTION_KEY_PREVIOUS_VALUE: ${{ secrets.ENCRYPTION_KEY_PREVIOUS }}
+          M2M_CLIENTS_VALUE: ${{ secrets.M2M_CLIENTS }}
+          M2M_JWT_SECRET_VALUE: ${{ secrets.M2M_JWT_SECRET }}
+          SATISPAY_SECRET_VALUE: ${{ secrets.SATISPAY_SECRET }}
+        run: |
+          set -euo pipefail
+
+          upsert_secret() {
+            local name="$1"
+            local value="$2"
+
+            if gcloud secrets describe "$name" --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+              printf '%s' "$value" | gcloud secrets versions add "$name" --project "$GCP_PROJECT_ID" --data-file=- >/dev/null
+            else
+              printf '%s' "$value" | gcloud secrets create "$name" --project "$GCP_PROJECT_ID" --replication-policy=automatic --data-file=- >/dev/null
+            fi
+          }
+
+          upsert_secret "ENCRYPTION_KEY" "${ENCRYPTION_KEY_VALUE}"
+          upsert_secret "ENCRYPTION_KEY_PREVIOUS" "${ENCRYPTION_KEY_PREVIOUS_VALUE:-}"
+          upsert_secret "M2M_JWT_SECRET" "${M2M_JWT_SECRET_VALUE}"
+          upsert_secret "M2M_CLIENTS" "${M2M_CLIENTS_VALUE}"
+          upsert_secret "SATISPAY_SECRET" "${SATISPAY_SECRET_VALUE}"
+
+      - name: Grant runtime access to secrets
+        run: |
+          set -euo pipefail
+
+          for secret in ENCRYPTION_KEY ENCRYPTION_KEY_PREVIOUS M2M_JWT_SECRET M2M_CLIENTS SATISPAY_SECRET; do
+            gcloud secrets add-iam-policy-binding "$secret" \
+              --project "$GCP_PROJECT_ID" \
+              --member "serviceAccount:${{ steps.runtime_sa.outputs.email }}" \
+              --role "roles/secretmanager.secretAccessor" \
+              >/dev/null
+          done
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure Artifact Registry auth
+        run: gcloud auth configure-docker "${GCP_REGION}-docker.pkg.dev" --quiet
+
+      - name: Build backend image
+        env:
+          IMAGE: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          gcloud builds submit --project "$GCP_PROJECT_ID" --tag "$IMAGE" .
+
+      - name: Deploy backend to Cloud Run
+        id: deploy_api
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: ${{ env.CLOUD_RUN_SERVICE }}
+          region: ${{ env.GCP_REGION }}
+          image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.GCP_ARTIFACT_REGISTRY_REPOSITORY }}/${{ env.CLOUD_RUN_SERVICE }}:${{ github.sha }}
+          env_vars: |-
+            FIREBASE_PROJECT_ID=${{ env.VITE_FIREBASE_PROJECT_ID }}
+            SATISPAY_ENV=${{ env.SATISPAY_ENV }}
+          env_vars_update_strategy: merge
+          secrets: |-
+            ENCRYPTION_KEY=ENCRYPTION_KEY:latest
+            ENCRYPTION_KEY_PREVIOUS=ENCRYPTION_KEY_PREVIOUS:latest
+            M2M_JWT_SECRET=M2M_JWT_SECRET:latest
+            M2M_CLIENTS=M2M_CLIENTS:latest
+            SATISPAY_SECRET=SATISPAY_SECRET:latest
+          flags: >-
+            --service-account=${{ steps.runtime_sa.outputs.email }}
+
+      - name: Resolve production API base URL
+        id: api_base
+        run: |
+          set -euo pipefail
+
+          if [ -n "${API_BASE_URL:-}" ]; then
+            echo "url=${API_BASE_URL%/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=${{ steps.deploy_api.outputs.url }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update callback URL in Cloud Run
+        run: |
+          set -euo pipefail
+
+          gcloud run services update "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --update-env-vars "LOCATION=${{ steps.api_base.outputs.url }}"
+
+      - name: Allow unauthenticated Cloud Run invocations
+        if: vars.CLOUD_RUN_ALLOW_UNAUTHENTICATED == 'true'
+        run: |
+          set -euo pipefail
+
+          gcloud run services add-iam-policy-binding "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --member="allUsers" \
+            --role="roles/run.invoker"
+
+      - name: Build frontend
+        env:
+          VITE_API_BASE: ${{ steps.api_base.outputs.url }}
+          VITE_FIREBASE_API_KEY: ${{ env.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ env.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ env.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ env.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ env.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ env.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_MEASUREMENT_ID: ${{ env.VITE_FIREBASE_MEASUREMENT_ID }}
+        run: pnpm --filter @muvat/ui build
+
+      - name: Deploy frontend to Firebase Hosting
+        run: pnpm dlx firebase-tools@latest deploy --project "$VITE_FIREBASE_PROJECT_ID" --only hosting --non-interactive
+
+      - name: Publish deployment summary
+        run: |
+          {
+            echo "## Production deployment completed"
+            echo ""
+            echo "- API: ${{ steps.api_base.outputs.url }}"
+            echo "- Cloud Run service: ${CLOUD_RUN_SERVICE}"
+            echo "- Firebase project: ${VITE_FIREBASE_PROJECT_ID}"
+          } >> "$GITHUB_STEP_SUMMARY"
