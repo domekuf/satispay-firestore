@@ -125,7 +125,9 @@ jobs:
           }
 
           upsert_secret "ENCRYPTION_KEY" "${ENCRYPTION_KEY_VALUE}"
-          upsert_secret "ENCRYPTION_KEY_PREVIOUS" "${ENCRYPTION_KEY_PREVIOUS_VALUE:-}"
+          if [ -n "${ENCRYPTION_KEY_PREVIOUS_VALUE:-}" ]; then
+            upsert_secret "ENCRYPTION_KEY_PREVIOUS" "${ENCRYPTION_KEY_PREVIOUS_VALUE}"
+          fi
           upsert_secret "M2M_JWT_SECRET" "${M2M_JWT_SECRET_VALUE}"
           upsert_secret "M2M_CLIENTS" "${M2M_CLIENTS_VALUE}"
           upsert_secret "SATISPAY_SECRET" "${SATISPAY_SECRET_VALUE}"
