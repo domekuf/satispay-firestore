@@ -188,6 +188,9 @@ jobs:
           secrets="ENCRYPTION_KEY=ENCRYPTION_KEY:latest"
           if [ -n "${ENCRYPTION_KEY_PREVIOUS_VALUE:-}" ]; then
             secrets="$secrets,ENCRYPTION_KEY_PREVIOUS=ENCRYPTION_KEY_PREVIOUS:latest"
+            echo "remove_secrets=" >> "$GITHUB_OUTPUT"
+          else
+            echo "remove_secrets=--remove-secrets=ENCRYPTION_KEY_PREVIOUS" >> "$GITHUB_OUTPUT"
           fi
           secrets="$secrets,M2M_JWT_SECRET=M2M_JWT_SECRET:latest,M2M_CLIENTS=M2M_CLIENTS:latest,SATISPAY_SECRET=SATISPAY_SECRET:latest"
           echo "secrets=$secrets" >> "$GITHUB_OUTPUT"
@@ -206,6 +209,8 @@ jobs:
           secrets: ${{ steps.cr_secrets.outputs.secrets }}
           flags: >-
             --service-account=${{ steps.runtime_sa.outputs.email }}
+            --remove-env-vars=M2M_TOKEN_TTL_SECONDS
+            ${{ steps.cr_secrets.outputs.remove_secrets }}
 
       - name: Resolve production API base URL
         id: api_base
