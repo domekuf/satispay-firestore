@@ -253,7 +253,7 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ env.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ env.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_MEASUREMENT_ID: ${{ env.VITE_FIREBASE_MEASUREMENT_ID }}
-        run: pnpm --filter @muvat/ui build
+        run: pnpm --filter @muvat/shared build && pnpm --filter @muvat/ui build
 
       - name: Deploy frontend to Firebase Hosting
         run: pnpm dlx firebase-tools@latest deploy --project "$VITE_FIREBASE_PROJECT_ID" --only hosting --non-interactive
