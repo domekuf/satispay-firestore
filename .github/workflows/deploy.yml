@@ -179,6 +179,19 @@ jobs:
             esac
           done
 
+      - name: Build Cloud Run secrets config
+        id: cr_secrets
+        env:
+          ENCRYPTION_KEY_PREVIOUS_VALUE: ${{ secrets.ENCRYPTION_KEY_PREVIOUS }}
+        run: |
+          set -euo pipefail
+          secrets="ENCRYPTION_KEY=ENCRYPTION_KEY:latest"
+          if [ -n "${ENCRYPTION_KEY_PREVIOUS_VALUE:-}" ]; then
+            secrets="$secrets,ENCRYPTION_KEY_PREVIOUS=ENCRYPTION_KEY_PREVIOUS:latest"
+          fi
+          secrets="$secrets,M2M_JWT_SECRET=M2M_JWT_SECRET:latest,M2M_CLIENTS=M2M_CLIENTS:latest,SATISPAY_SECRET=SATISPAY_SECRET:latest"
+          echo "secrets=$secrets" >> "$GITHUB_OUTPUT"
+
       - name: Deploy backend to Cloud Run
         id: deploy_api
         uses: google-github-actions/deploy-cloudrun@v3
@@ -190,12 +203,7 @@ jobs:
             FIREBASE_PROJECT_ID=${{ env.VITE_FIREBASE_PROJECT_ID }}
             SATISPAY_ENV=${{ env.SATISPAY_ENV }}
           env_vars_update_strategy: merge
-          secrets: |-
-            ENCRYPTION_KEY=ENCRYPTION_KEY:latest
-            ENCRYPTION_KEY_PREVIOUS=ENCRYPTION_KEY_PREVIOUS:latest
-            M2M_JWT_SECRET=M2M_JWT_SECRET:latest
-            M2M_CLIENTS=M2M_CLIENTS:latest
-            SATISPAY_SECRET=SATISPAY_SECRET:latest
+          secrets: ${{ steps.cr_secrets.outputs.secrets }}
           flags: >-
             --service-account=${{ steps.runtime_sa.outputs.email }}
 
